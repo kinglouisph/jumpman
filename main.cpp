@@ -7,7 +7,12 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/quaternion.hpp>
+#include <glm/gtx/string_cast.hpp>
+
 
 uint32_t VBO;
 uint32_t VAO;
@@ -32,10 +37,64 @@ const char* GetGLErrorStr(GLenum err)
 float camxr = M_PI_2;
 float camyr = 0.0f;
 const float camSpeed = 0.1f;
-const float camRotSpeed = 0.008f;
+const float camRotSpeed = 0.006f;
 double lmx = 0.0f;
 double lmy = 0.0f;
 char firstMouse = 1;
+
+float typeColors[][3] = {
+    {1.0f,1.0f,1.0f},
+    {1.0f,0.0f,0.0f}
+};
+
+struct Platform {
+    float x;    
+    float y;
+    float z;
+    float xr;
+    float yr;
+    float xl;
+    float yl;
+    float zl;
+    uint8_t type;
+    glm::mat4 model;
+    float color[3];
+};
+
+Platform* platforms[300];
+unsigned int numPlatforms = 0;
+
+void addPlatform(float px,float py,float pz,float pxr,float pyr,float pxl,float pyl,float pzl,unsigned char ptype) {
+    Platform* a = (Platform*)malloc(sizeof(Platform));
+    (*a).x=px;
+    (*a).y=py;
+    (*a).z=pz;
+    (*a).xr=pxr;
+    (*a).yr=pyr;
+    (*a).xl=pxl;
+    (*a).yl=pyl;
+    (*a).zl=pzl;
+    (*a).type=ptype;
+    
+    (*a).color[0] = typeColors[ptype][0];
+    (*a).color[1] = typeColors[ptype][1];
+    (*a).color[2] = typeColors[ptype][2];
+
+    glm::quat quaternion = glm::quat(glm::vec3(pxr,pyr,0));
+    glm::mat4 rMatrix = glm::toMat4(quaternion);
+    glm::mat4 sMatrix = glm::scale(glm::vec3(pxl,pyl,pzl));
+    glm::mat4 tMatrix = glm::translate(glm::vec3(px,py,pz));
+
+    (*a).model = tMatrix * rMatrix * sMatrix * glm::mat4(1.0f);
+    
+    platforms[numPlatforms] = a;
+    numPlatforms+=1; 
+}
+
+void popPlatform() {
+    numPlatforms-=1;
+    free(platforms[numPlatforms]);
+}
 
 void mouse_callback(GLFWwindow* window, double dmposx, double dmposy) {
         if (firstMouse) {
@@ -61,8 +120,6 @@ void mouse_callback(GLFWwindow* window, double dmposx, double dmposy) {
 int main() {
     uint32_t width=600;
     uint32_t height=600;
-
-    
 
     const char* vertexShaderSrc = "#version 330 core\n"
     "uniform mat4 model;\n"
@@ -172,19 +229,18 @@ int main() {
         4,5,7,
         4,6,7
     };
-
     int modelLocation = glGetUniformLocation(shaderProgram, "model");
     int viewLocation = glGetUniformLocation(shaderProgram, "view");
     int projectionLocation = glGetUniformLocation(shaderProgram, "projection");
     int colorLocation = glGetUniformLocation(shaderProgram, "color");
     //int timeLocation = glGetUniformLocation(shaderProgram, "time");
 
-    glm::mat4 model = glm::mat4(1.0f);
     glm::mat4 view = glm::mat4(1.0f);
     glm::mat4 projection = glm::mat4(1.0f);
     float color[] = {1.0f,0.0f,0.0f};
 
     projection = glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 100.0f);
+    glUniformMatrix4fv(projectionLocation, 1, GL_FALSE, glm::value_ptr(projection));
 
     glm::vec3 camPos = glm::vec3(0.0f,0.0f,-10.0f);
     glm::vec3 camDir = glm::vec3(0.0f,0.0f,1.0f);
@@ -209,7 +265,16 @@ int main() {
     glEnableVertexAttribArray(0);
     glBindVertexArray(0);
 
-    
+    //setup level
+
+    addPlatform(0,-5,4,0,0,3,1,10,0);
+
+
+
+
+
+
+
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -236,7 +301,7 @@ int main() {
         camDir.x = cos(camxr) * cos(camyr);
         camDir.y = sin(camyr);
         camDir.z = sin(camxr) * cos(camyr);
-        camDir = glm::normalize(camDir);
+        //camDir = glm::normalize(camDir); //probably unnecessary
 
         view = glm::lookAt(camPos, camPos + camDir, camUp);
 
@@ -247,17 +312,27 @@ int main() {
         gettimeofday(&tv, NULL);
         float time = (float)tv.tv_usec + (float)(1000000 * (tv.tv_sec%(60*60*24)));*/
         
-
-        glUniformMatrix4fv(modelLocation, 1, GL_FALSE, glm::value_ptr(model));
         glUniformMatrix4fv(viewLocation, 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(projectionLocation, 1, GL_FALSE, glm::value_ptr(projection));
-        glUniform3f(colorLocation, color[0],color[1],color[2]);
+
         //glUniform1f(timeLocation, (float)sin(time/1000000.0f)/10.0f);
 
-        //draw
-        glClearColor(0.1f, 0.1f, 0.8f, 1.0f);
+
+        glClearColor(0.15f, 0.4f, 0.9f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glDrawElements(GL_TRIANGLES,36,GL_UNSIGNED_INT,0);
+
+        for (int i = 0; i < numPlatforms; i++) {
+            Platform a = *platforms[i];
+            glUniformMatrix4fv(modelLocation, 1, GL_FALSE, glm::value_ptr(a.model));
+            glUniform3f(colorLocation, a.color[0],a.color[1],a.color[2]);
+            
+            glDrawElements(GL_TRIANGLES,36,GL_UNSIGNED_INT,0);
+
+        }
+        
+        //draw
+        
+        
         glBindVertexArray(0);
 
         glfwSwapBuffers(window);
