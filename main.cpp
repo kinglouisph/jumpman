@@ -12,6 +12,7 @@
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include <glm/gtx/norm.hpp>
 
 
 uint32_t VBO;
@@ -36,8 +37,8 @@ const char* GetGLErrorStr(GLenum err)
 
 float camxr = M_PI_2;
 float camyr = 0.0f;
-const float camSpeed = 0.1f;
 const float camRotSpeed = 0.006f;
+
 double lmx = 0.0f;
 double lmy = 0.0f;
 char firstMouse = 1;
@@ -239,7 +240,7 @@ int main() {
     glm::mat4 projection = glm::mat4(1.0f);
     float color[] = {1.0f,0.0f,0.0f};
 
-    projection = glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 100.0f);
+    projection = glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 500.0f);
     glUniformMatrix4fv(projectionLocation, 1, GL_FALSE, glm::value_ptr(projection));
 
     glm::vec3 camPos = glm::vec3(0.0f,0.0f,-10.0f);
@@ -266,8 +267,20 @@ int main() {
     glBindVertexArray(0);
 
     //setup level
+    glm::vec3 plPos = glm::vec3(0.0f,3 .0f,0.0f);
+    glm::vec3 plVel = glm::vec3(0.0f,0.0f,0.0f);
+    bool onGround = true;
+    float dragCoefficient = 0.004f;
+    float frictionCoefficient = 0.096f;
+    float gravityConstant = 0.05f;
+    float plSpeed = 0.1f;
+    float plStrafeSpeed = 0.02f;
 
-    addPlatform(0,-5,4,0,0,3,1,10,0);
+    //coefficient for max speed on ground is movespeed / (dragCoefficient + frictionCoefficient)^2
+    
+    
+    addPlatform(0,-8,-2,0,0,3,1,10,0);
+    
 
 
 
@@ -279,25 +292,32 @@ int main() {
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-            camPos += camDir * camSpeed;
+            if (onGround) {plVel += camDir * plSpeed;}
         }
         if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-            camPos -= glm::normalize(glm::cross(camDir, camUp)) * camSpeed;
+            if (onGround) {plVel -= glm::normalize(glm::cross(camDir, camUp)) * plStrafeSpeed;}
         }
         if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-            camPos -= camDir * camSpeed;
+            if (onGround) {plVel -= camDir * plSpeed;}
         }
         if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-            camPos += glm::normalize(glm::cross(camDir, camUp)) * camSpeed;
-        }
-        if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
-            camPos.y -= camSpeed;
-        }
-        if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
-            camPos.y += camSpeed;
+            if (onGround) {plVel += glm::normalize(glm::cross(camDir, camUp)) * plStrafeSpeed;}
         }
 
+        float plVelMagnitude = glm::length(plVel);
+        plVel.y -= gravityConstant;
         
+        //friction / air resistance
+        if (onGround) {
+            plVel = plVel - plVel*(dragCoefficient+frictionCoefficient)*plVelMagnitude;
+        } else {
+            plVel = plVel - plVel*dragCoefficient*plVelMagnitude;
+        }
+
+        plPos += plVel;
+        camPos = plPos;
+
+
         camDir.x = cos(camxr) * cos(camyr);
         camDir.y = sin(camyr);
         camDir.z = sin(camxr) * cos(camyr);
