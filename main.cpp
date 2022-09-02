@@ -51,7 +51,7 @@ float typeColors[][6] = {
 glm::vec3 plPos = glm::vec3(0.05f,0.05f,0.05f);
 glm::vec3 plVel = glm::vec3(0.0f,0.0f,0.0f);
 bool onGround = true;
-float dragCoefficient = 0.03f;
+float dragCoefficient = 0.02f;
 float frictionCoefficient = 0.5f;
 float gravityConstant = 0.001f;
 float plSpeed = 0.018f;
@@ -422,7 +422,7 @@ int main() {
 
         plPos += plVel;
         camPos = plPos;
-printf("%f\n", plPos.y);
+printf("%f\n", plVel.y);
 
         camDir.x = cos(camxr) * cos(camyr);
         camDir.y = sin(camyr);
