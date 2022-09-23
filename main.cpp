@@ -5,6 +5,7 @@
 #include <sys/time.h>
 #include <math.h>
 
+//opengl
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/transform.hpp>
@@ -14,11 +15,20 @@
 #include <glm/gtx/string_cast.hpp>
 #include <glm/gtx/norm.hpp>
 
+//-I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-4 -pthread -lfreetype 
+
+/*fonts
+#include <ft2build.h>
+#include FT_FREETYPE_H  */
 
 uint32_t VBO;
 uint32_t VAO;
 uint32_t EBO;
 unsigned int shaderProgram;
+
+/*uint32_t VBO2;
+uint32_t VAO2;
+unsigned int textShaderProgram;*/
 
 const char* GetGLErrorStr(GLenum err)
 {
@@ -59,8 +69,8 @@ float plStrafeSpeed = plSpeed/2;
 float plAirSpeed = plSpeed/8;
 float plHeight = 2.0f;
 float plJumpForce = 0.08f;
+
 //coefficient for max speed on ground is movespeed / (dragCoefficient + frictionCoefficient)^2
-    
 
 typedef struct Platform {
     glm::vec3 pos;
@@ -72,17 +82,66 @@ typedef struct Platform {
     float zl;
     uint8_t type;
     glm::mat4 model;
-    //float color[3];
-    //float color2[3];
-    //glm::vec3 collisionPoint1;
     glm::vec3 collisionPoint5;
     glm::vec3 collisionPoint6;
     glm::vec3 collisionPoint7;    
     float collisionProduct1,collisionProduct2,collisionProduct3,collisionProduct4,collisionProduct5,collisionProduct6;
     glm::quat quaternion;
     float sinPitch;
+    float distNum;
 
 } Platform;
+
+typedef struct Projectile {
+    glm::vec3 pos;
+    glm::vec3 vel;
+    glm::mat4 model;
+    Projectile* next;
+} Projectile;
+
+int numProjectiles = 0;
+Projectile* firstProjectile;
+float projectileSize = 0.2;
+
+void addProjectile(glm::vec3 pos, glm::vec3 vel) {
+    Projectile* a = (Projectile*)malloc(sizeof(Projectile));
+    (*a).pos = pos;
+    (*a).vel = vel;
+    if (numProjectiles > 0) {
+        (*a).next = firstProjectile;
+    } else {
+        a->next = NULL;
+    }
+
+    //there has to be a better way to get a rotation matrix
+    glm::vec3 temp = glm::normalize(glm::vec3(vel.x,0,vel.z));
+
+    glm::quat quaternion = glm::quat(glm::vec3(asin(temp.x),0,acos(temp.z)));
+    glm::mat4 rMatrix = glm::toMat4(quaternion);
+    glm::mat4 sMatrix = glm::scale(glm::vec3(projectileSize,projectileSize,projectileSize));
+    glm::mat4 tMatrix = glm::translate(pos);
+
+    (*a).model = tMatrix * rMatrix * sMatrix * glm::mat4(1.0f);
+    
+    firstProjectile = a;
+    numProjectiles+=1;
+}
+
+void killProjectileAfter(Projectile* a) {
+   if (a == NULL) {
+    Projectile* b = firstProjectile->next;
+    free(firstProjectile);
+    firstProjectile = b;
+   } else {
+    Projectile* b = a->next->next;
+    free((*a).next);
+    a->next = b;
+   }
+
+   numProjectiles -= 1;
+   
+
+}
 
 Platform* platforms[300];
 unsigned int numPlatforms = 0;
@@ -97,13 +156,6 @@ void addPlatform(float px,float py,float pz,float yaw,float pitch,float pxl,floa
     (*a).yl=pyl;
     (*a).zl=pzl;
     (*a).type=ptype;
-    
-    /*(*a).color[0] = typeColors[ptype*2][0];
-    (*a).color[1] = typeColors[ptype*2][1];
-    (*a).color[2] = typeColors[ptype*2][2];
-    (*a).color2[0] = typeColors[ptype*2+1][0];
-    (*a).color2[1] = typeColors[ptype*2+1][1];
-    (*a).color2[2] = typeColors[ptype*2+1][2];*/
 
     glm::quat quaternion = glm::quat(glm::vec3(pitch,yaw,0));
     glm::mat4 rMatrix = glm::toMat4(quaternion);
@@ -131,7 +183,7 @@ void addPlatform(float px,float py,float pz,float yaw,float pitch,float pxl,floa
     (*a).collisionProduct5 = glm::dot((*a).collisionPoint7, collisionPoint1);
     (*a).collisionProduct6 = glm::dot((*a).collisionPoint7, collisionPoint4);
 
-
+    (*a).distNum = glm::length2(collisionPoint1);
 
 
     platforms[numPlatforms] = a;
@@ -164,8 +216,10 @@ void mouse_callback(GLFWwindow* window, double dmposx, double dmposy) {
     if (camyr < -M_PI_2) {camyr=-M_PI_2*.99;}
 }
 
+
+
 int main() {
-    uint32_t width=600;
+    uint32_t width=800;
     uint32_t height=600;
 
     const char* vertexShaderSrc = "#version 330 core\n"
@@ -181,6 +235,7 @@ int main() {
     "out vec4 outColor;\n"
     "uniform vec3 color;\n"
     "void main(){outColor=vec4(color,1);}\0";
+
 
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -201,7 +256,7 @@ int main() {
         return 1;
     }
 
-    glViewport(0,0,600,600);
+    glViewport(0,0,width,height);
 
     int success;
     char infoLog[512];
@@ -247,6 +302,8 @@ int main() {
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
+    
+
     //capture mouse
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); 
     glfwSetCursorPosCallback(window, mouse_callback);  
@@ -279,15 +336,21 @@ int main() {
     int modelLocation = glGetUniformLocation(shaderProgram, "model");
     int viewLocation = glGetUniformLocation(shaderProgram, "view");
     int projectionLocation = glGetUniformLocation(shaderProgram, "projection");
+    
     int colorLocation = glGetUniformLocation(shaderProgram, "color");
     //int timeLocation = glGetUniformLocation(shaderProgram, "time");
 
+    //int textProjectionLocation = glGetUniformLocation(textShaderProgram, "orthoProjection");
     glm::mat4 view = glm::mat4(1.0f);
     glm::mat4 projection = glm::mat4(1.0f);
+    //glm::mat4 textProjection = glm::mat4(1.0f);
     float color[] = {1.0f,0.0f,0.0f};
 
     projection = glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 500.0f);
     glUniformMatrix4fv(projectionLocation, 1, GL_FALSE, glm::value_ptr(projection));
+
+    //Projection = glm::ortho(0.0f, (float)width, 0.0f, (float)height);
+    //glUniformMatrix4fv(projectionLocation, 1, GL_FALSE, glm::value_ptr(textProjection));
 
     glm::vec3 camPos = glm::vec3(0.0f,0.0f,-10.0f);
     glm::vec3 camDir = glm::vec3(0.0f,0.0f,1.0f);
@@ -310,31 +373,18 @@ int main() {
 
     glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,3*sizeof(float),(void*)0);
     glEnableVertexAttribArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
+    glUseProgram(0);
 
     
-    
-    
-    
-    
-    //setup level
-    addPlatform(0,-6,0,0,0,10,2,20,0);
-    addPlatform(3,-6,35,M_PI_2,0.2,40,2,20,0);
-    
 
 
 
 
 
 
-
-
-
-
-
-
-
-
+    addPlatform(0.1,-5,5,0,0,4,1,20,0);
 
 
     float sinPitch = 0;
@@ -422,7 +472,7 @@ int main() {
 
         plPos += plVel;
         camPos = plPos;
-printf("%f\n", plVel.y);
+        //printf("%f\n", plVel.y);
 
         camDir.x = cos(camxr) * cos(camyr);
         camDir.y = sin(camyr);
@@ -450,15 +500,22 @@ printf("%f\n", plVel.y);
         for (int i = 0; i < numPlatforms; i++) {
             Platform a = *platforms[i];
             glUniformMatrix4fv(modelLocation, 1, GL_FALSE, glm::value_ptr(a.model));
-            //glUniform3f(colorLocation, a.color2[0],a.color2[1],a.color2[2]);
             
             //glDrawElements(GL_TRIANGLES,6,GL_UNSIGNED_INT,0);
             glUniform3f(colorLocation, typeColors[a.type][0],typeColors[a.type][1],typeColors[a.type][2]);
 
-            glDrawElements(GL_TRIANGLES,36,GL_UNSIGNED_INT,0/*(void*)(6 * sizeof(GLuint))*/);
+            glDrawElements(GL_TRIANGLES,36,GL_UNSIGNED_INT,0);
         }
         
-        //draw
+        
+        /*Projectile* a = firstProjectile;
+        for (int i = 0; i < numProjectiles; i++) {
+            glUniformMatrix4fv(modelLocation, 1, GL_FALSE, glm::value_ptr(a->model));
+            glUniform3f(colorLocation, 0xdd,0xd8,0x10);
+
+            glDrawElements(GL_TRIANGLES,36,GL_UNSIGNED_INT,0);
+            a = a->next;
+        }*/
         
         
         glBindVertexArray(0);
