@@ -101,11 +101,20 @@ typedef struct Projectile {
 
 int numProjectiles = 0;
 Projectile* firstProjectile;
-float projectileSize = 0.2;
+float projectileSize = 0.1;
+float projectileSpeed = 1.2f;
+float projectileDrag = 0.001;
+float projectileOffset = 1;
+int firingTime = 0;
+int firingRate = 10; //frames
+glm::vec3 camPos = glm::vec3(0.0f,0.0f,-10.0f);
+glm::vec3 camDir = glm::vec3(0.0f,0.0f,1.0f);
+glm::vec3 camUp = glm::vec3(0.0f,1.0f,0.0f);
+glm::mat4 projectileSMatrix = glm::scale(glm::vec3(projectileSize,projectileSize,projectileSize)) * glm::mat4(1.0f);
 
-void addProjectile(glm::vec3 pos, glm::vec3 vel) {
+void addProjectile(float x,float y,float z,glm::vec3 vel) {
     Projectile* a = (Projectile*)malloc(sizeof(Projectile));
-    (*a).pos = pos;
+    (*a).pos = glm::vec3(x,y,z) + glm::normalize(vel);
     (*a).vel = vel;
     if (numProjectiles > 0) {
         (*a).next = firstProjectile;
@@ -116,12 +125,11 @@ void addProjectile(glm::vec3 pos, glm::vec3 vel) {
     //there has to be a better way to get a rotation matrix
     glm::vec3 temp = glm::normalize(glm::vec3(vel.x,0,vel.z));
 
-    glm::quat quaternion = glm::quat(glm::vec3(asin(temp.x),0,acos(temp.z)));
-    glm::mat4 rMatrix = glm::toMat4(quaternion);
-    glm::mat4 sMatrix = glm::scale(glm::vec3(projectileSize,projectileSize,projectileSize));
-    glm::mat4 tMatrix = glm::translate(pos);
+    //glm::quat quaternion = glm::quat(glm::vec3(asin(temp.x),0,acos(temp.z)));
+    //glm::mat4 rMatrix = glm::toMat4(quaternion);
+    glm::mat4 tMatrix = glm::translate(a->pos);
 
-    (*a).model = tMatrix * rMatrix * sMatrix * glm::mat4(1.0f);
+    (*a).model = tMatrix * projectileSMatrix;// * glm::mat4(1.0f);
     
     firstProjectile = a;
     numProjectiles+=1;
@@ -195,6 +203,8 @@ void popPlatform() {
     free(platforms[numPlatforms]);
 }
 
+
+
 void mouse_callback(GLFWwindow* window, double dmposx, double dmposy) {
     if (firstMouse) {
         lmx = dmposx;
@@ -216,7 +226,13 @@ void mouse_callback(GLFWwindow* window, double dmposx, double dmposy) {
     if (camyr < -M_PI_2) {camyr=-M_PI_2*.99;}
 }
 
-
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+    if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS && firingTime == 0) {
+       firingTime = firingRate;
+       glm::vec3 a = camDir * projectileSpeed + plVel;
+       addProjectile(plPos.x,plPos.y,plPos.z, a);
+    }
+}
 
 int main() {
     uint32_t width=800;
@@ -307,6 +323,7 @@ int main() {
     //capture mouse
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); 
     glfwSetCursorPosCallback(window, mouse_callback);  
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
 
     float squarePoints[] = {
         -1,1,1,
@@ -352,9 +369,7 @@ int main() {
     //Projection = glm::ortho(0.0f, (float)width, 0.0f, (float)height);
     //glUniformMatrix4fv(projectionLocation, 1, GL_FALSE, glm::value_ptr(textProjection));
 
-    glm::vec3 camPos = glm::vec3(0.0f,0.0f,-10.0f);
-    glm::vec3 camDir = glm::vec3(0.0f,0.0f,1.0f);
-    glm::vec3 camUp = glm::vec3(0.0f,1.0f,0.0f);
+    
 
     //shader stuff
     glUseProgram(shaderProgram);
@@ -377,7 +392,8 @@ int main() {
     glBindVertexArray(0);
     glUseProgram(0);
 
-    
+    glEnable(GL_DEPTH_TEST);
+
 
 
 
@@ -385,11 +401,14 @@ int main() {
 
 
     addPlatform(0.1,-5,5,0,0,4,1,20,0);
+    addPlatform(50,10,50,M_PI_2,M_PI_2,10,10,10,1);
 
 
     float sinPitch = 0;
+    bool shouldClose = false;
+    int defeatedPlatforms = 0;
 
-    while (!glfwWindowShouldClose(window)) {
+    while (!(glfwWindowShouldClose(window) || shouldClose)) {
         glfwPollEvents();
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
             if (onGround) {
@@ -425,39 +444,91 @@ int main() {
                 plPos += plVel;
             }
         }
+        if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
+            shouldClose = true;
+        }
 
         //check on ground
         onGround = false;
         sinPitch = 0;
         for (int i = 0; i < numPlatforms; i++) {
-            Platform platform = *platforms[i];
-            glm::vec3 groundTestPoint = plPos - platform.pos;
+            Platform* platform = platforms[i];
+            glm::vec3 groundTestPoint = plPos - platform->pos;
             groundTestPoint.y -= plHeight;
-            //groundTestPoint = (platform.rotationThing * glm::length(groundTestPoint));
+            //groundTestPoint = (platform->rotationThing * glm::length(groundTestPoint));
             
-            //groundTestPoint =  groundTestPoint + platform.halfLen;
+            //groundTestPoint =  groundTestPoint + platform->halfLen;
             
             //printf("%f\n%f\n%f\n\n",groundTestPoint.x,groundTestPoint.y,groundTestPoint.z);
 
-            float dot = glm::dot(groundTestPoint, platform.collisionPoint5);
+            float dot = glm::dot(groundTestPoint, platform->collisionPoint5);
             //printf("%f", dot);
-            if (dot < platform.collisionProduct1 && dot > platform.collisionProduct2) {            
-                float dot = glm::dot(groundTestPoint, platform.collisionPoint6);
-                if (dot < platform.collisionProduct3 && dot > platform.collisionProduct4) {                
-                    float dot = glm::dot(groundTestPoint, platform.collisionPoint7);
-                    if (dot < platform.collisionProduct5 && dot > platform.collisionProduct6) {                    
+            if (dot < platform->collisionProduct1 && dot > platform->collisionProduct2) {            
+                float dot = glm::dot(groundTestPoint, platform->collisionPoint6);
+                if (dot < platform->collisionProduct3 && dot > platform->collisionProduct4) {                
+                    float dot = glm::dot(groundTestPoint, platform->collisionPoint7);
+                    if (dot < platform->collisionProduct5 && dot > platform->collisionProduct6) {                    
                         onGround = true;
                         plVel.y = 0;
-                        sinPitch = platform.sinPitch * -cos(platform.yaw - atan2(plVel.x, plVel.z));
+                        sinPitch = platform->sinPitch * -cos(platform->yaw - atan2(plVel.x, plVel.z));
                     }
                 }
             }
-
-
-
-
         }
 
+        {
+            Projectile* a = firstProjectile;
+            Projectile* b = NULL;
+            loop: while (a != NULL) {
+                if (a->pos.y < -50) {
+                    a=a->next;
+                    killProjectileAfter(b);
+                    continue;
+                }
+                
+                //check collisions
+                for (int i = 0; i < numPlatforms; i++) {
+                    Platform* platform = platforms[i];
+                    glm::vec3 groundTestPoint = a->pos - platform->pos;
+                    if (glm::length2(groundTestPoint) > platform->distNum) {
+                        continue;
+                    }
+                    
+                    
+                    float dot = glm::dot(groundTestPoint, platform->collisionPoint5);
+                    //printf("%f", dot);
+                    if (dot < platform->collisionProduct1 && dot > platform->collisionProduct2) {            
+                        float dot = glm::dot(groundTestPoint, platform->collisionPoint6);
+                        if (dot < platform->collisionProduct3 && dot > platform->collisionProduct4) {                
+                            float dot = glm::dot(groundTestPoint, platform->collisionPoint7);
+                            if (dot < platform->collisionProduct5 && dot > platform->collisionProduct6) {                    
+                                if (platform->type == 1) {
+                                    defeatedPlatforms += 1;
+                                    platform->type = 0;
+                                }
+                                
+                                a=a->next;
+                                killProjectileAfter(b);
+                                goto loop;
+                            }
+                        }
+                    }
+                }
+                
+                a->vel.y -= gravityConstant;
+                a->vel = a->vel - a->vel * (projectileDrag) * glm::length(a->vel);
+                a->pos += a->vel;
+                
+                glm::mat4 tMatrix = glm::translate(a->pos);
+                (*a).model = tMatrix * projectileSMatrix;
+
+                b = a;
+                a = a->next;
+                
+                
+            }
+        }
+        //plVel = plVel - plVel*(dragCoefficient+frictionCoefficient)*plVelMagnitude;
         
         if (!onGround) {plVel.y -= gravityConstant;};
         
@@ -480,7 +551,13 @@ int main() {
         //camDir = glm::normalize(camDir); //probably unnecessary
 
         view = glm::lookAt(camPos, camPos + camDir, camUp);
+        if (firingTime>0) {
+            firingTime--;
+        }
 
+
+
+        //draw shit
         glUseProgram(shaderProgram);
         glBindVertexArray(VAO);
         
@@ -508,14 +585,15 @@ int main() {
         }
         
         
-        /*Projectile* a = firstProjectile;
+        Projectile* a = firstProjectile;
         for (int i = 0; i < numProjectiles; i++) {
             glUniformMatrix4fv(modelLocation, 1, GL_FALSE, glm::value_ptr(a->model));
-            glUniform3f(colorLocation, 0xdd,0xd8,0x10);
+            glUniform3f(colorLocation, 0.8f,0.8f,0.1f);
 
             glDrawElements(GL_TRIANGLES,36,GL_UNSIGNED_INT,0);
+            
             a = a->next;
-        }*/
+        }
         
         
         glBindVertexArray(0);
