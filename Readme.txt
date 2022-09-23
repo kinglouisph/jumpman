@@ -9,9 +9,9 @@ Click to shoot
 For most fun play this game like a speedrun
 
 
-Storyline:
+Story:
 
-You are extremely drunk.
 You must get to the green cube or GLORIOUS KOSOVO will perish.
+You are also extremely drunk.
 
 Good luck.
