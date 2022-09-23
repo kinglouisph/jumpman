@@ -47,7 +47,7 @@ const char* GetGLErrorStr(GLenum err)
 
 float camxr = M_PI_2;
 float camyr = 0.0f;
-const float camRotSpeed = 0.006f;
+const float camRotSpeed = 0.003f;
 
 double lmx = 0.0f;
 double lmy = 0.0f;
@@ -55,7 +55,8 @@ char firstMouse = 1;
 
 float typeColors[][6] = {
     {1.0f,1.0f,1.0f, 0.8f,0.8f,0.8f},
-    {0.8f,0.1f,0.1f, 1.0f,0.0f,0.0f}
+    {0.9f,0.2f,0.2f, 1.0f,0.0f,0.0f},
+    {0.0f,1.0f,0.0f, 0.0f,0.0f,0.0f}
 };
 
 glm::vec3 plPos = glm::vec3(0.05f,0.05f,0.05f);
@@ -69,6 +70,7 @@ float plStrafeSpeed = plSpeed/2;
 float plAirSpeed = plSpeed/8;
 float plHeight = 2.0f;
 float plJumpForce = 0.08f;
+bool haxMode = false;
 
 //coefficient for max speed on ground is movespeed / (dragCoefficient + frictionCoefficient)^2
 
@@ -363,7 +365,7 @@ int main() {
     //glm::mat4 textProjection = glm::mat4(1.0f);
     float color[] = {1.0f,0.0f,0.0f};
 
-    projection = glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 500.0f);
+    projection = glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 50.0f);
     glUniformMatrix4fv(projectionLocation, 1, GL_FALSE, glm::value_ptr(projection));
 
     //Projection = glm::ortho(0.0f, (float)width, 0.0f, (float)height);
@@ -400,9 +402,41 @@ int main() {
 
 
 
-    addPlatform(0.1,-5,5,0,0,4,1,20,0);
-    addPlatform(50,10,50,M_PI_2,M_PI_2,10,10,10,1);
+    addPlatform(0,-5,5,0,0,4,1,20,0);
 
+    addPlatform(15,-5,20,M_PI_2,0,4,1,20,0);
+
+    addPlatform(40,-5,20,M_PI_2/2,0,4,1,20,1);
+
+    addPlatform(80,-5,40,M_PI_2/2,0,4,1,20,0);
+
+    addPlatform(100,-5,80,M_PI_2,0,4,1,4,1);
+    addPlatform(130,-3,90,M_PI_2,0,3,1,3,1);
+    addPlatform(160,-2,100,M_PI_2,0,2,1,2,1);
+
+    addPlatform(190,-1,95,0,  M_PI_2/2,3,1,3,0);
+    addPlatform(210,-1,105,0,-M_PI_2/2,3,1,3,0);
+    addPlatform(230,0,90,0,          0,3,1,3,1);
+    addPlatform(270,-1,110,0,-M_PI_2/4,3,1,3,1);
+
+    //stairs
+    addPlatform(270,6,120,0,-M_PI_2/2,3,1,3,0);
+    addPlatform(270,15,130,0,-M_PI_2/2,2.5,1,3,0);
+    addPlatform(270,24,140,0,-M_PI_2/2,2,1,3,0);
+    addPlatform(270,33,150,0,-M_PI_2/2,1.5,1,3,0);
+    
+    addPlatform(270,35,160,0,0,3,1,3,1);
+
+    //arrow
+    addPlatform(270,35,200,0,0,           6,20,6,1);
+    addPlatform(265,29.5,200, M_PI_2, M_PI_2/2,   6,3,10,1);
+    addPlatform(275,29.5,200,M_PI_2,-M_PI_2/2,    6,3,10,1);
+
+    addPlatform(255,-30,190,0,0,   1,1,1,1);
+    addPlatform(220,-37,190,0,0,   1,1,1,1);
+    addPlatform(185,-44,190,0,0,   0.75f,1,0.75f,1);
+    addPlatform(155,-51,190,0,0,   0.75f,1,0.75f,1);
+    addPlatform(135,-60,190,0,0,   0.5,0.5,0.5,2);
 
     float sinPitch = 0;
     bool shouldClose = false;
@@ -438,16 +472,24 @@ int main() {
                 plVel -= glm::normalize(glm::vec3(camDir.z, 0, -camDir.x)) * plAirSpeed;
             }
         }
+        
         if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
-            if (onGround) {
+            
+            if (onGround || (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS)) {
                 plVel += glm::vec3(0, 1, 0) * plJumpForce;
                 plPos += plVel;
             }
         }
+
         if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
             shouldClose = true;
         }
+        
 
+        if (plPos.y < -75) {
+            shouldClose = true;
+        }
+        
         //check on ground
         onGround = false;
         sinPitch = 0;
@@ -468,6 +510,10 @@ int main() {
                 if (dot < platform->collisionProduct3 && dot > platform->collisionProduct4) {                
                     float dot = glm::dot(groundTestPoint, platform->collisionPoint7);
                     if (dot < platform->collisionProduct5 && dot > platform->collisionProduct6) {                    
+                        if (platform->type == 1 || platform->type == 2) {
+                            shouldClose = true;
+                        }
+                        
                         onGround = true;
                         plVel.y = 0;
                         sinPitch = platform->sinPitch * -cos(platform->yaw - atan2(plVel.x, plVel.z));
@@ -480,7 +526,7 @@ int main() {
             Projectile* a = firstProjectile;
             Projectile* b = NULL;
             loop: while (a != NULL) {
-                if (a->pos.y < -50) {
+                if (a->pos.y < -75) {
                     a=a->next;
                     killProjectileAfter(b);
                     continue;
@@ -571,7 +617,7 @@ int main() {
         //glUniform1f(timeLocation, (float)sin(time/1000000.0f)/10.0f);
 
 
-        glClearColor(0.15f, 0.4f, 0.9f, 1.0f);
+        glClearColor(0.20f, 0.5f, 0.9f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         for (int i = 0; i < numPlatforms; i++) {
@@ -588,7 +634,7 @@ int main() {
         Projectile* a = firstProjectile;
         for (int i = 0; i < numProjectiles; i++) {
             glUniformMatrix4fv(modelLocation, 1, GL_FALSE, glm::value_ptr(a->model));
-            glUniform3f(colorLocation, 0.8f,0.8f,0.1f);
+            glUniform3f(colorLocation, 0.9f,0.95f,0.3f);
 
             glDrawElements(GL_TRIANGLES,36,GL_UNSIGNED_INT,0);
             
