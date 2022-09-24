@@ -1,11 +1,17 @@
-#include <GL/glew.h>
+void _chk_fail() {
+    2+2;
+}
+void* __chk_fail = 0;
+
+#include <glad/glad.h>
+//#include "glad/glad.h"
 #include <GLFW/glfw3.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/time.h>
 #include <math.h>
 
-//opengl
+//glm
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/transform.hpp>
@@ -26,9 +32,6 @@ uint32_t VAO;
 uint32_t EBO;
 unsigned int shaderProgram;
 
-/*uint32_t VBO2;
-uint32_t VAO2;
-unsigned int textShaderProgram;*/
 
 const char* GetGLErrorStr(GLenum err)
 {
@@ -38,8 +41,8 @@ const char* GetGLErrorStr(GLenum err)
     case GL_INVALID_ENUM:      return "Invalid enum";
     case GL_INVALID_VALUE:     return "Invalid value";
     case GL_INVALID_OPERATION: return "Invalid operation";
-    case GL_STACK_OVERFLOW:    return "Stack overflow";
-    case GL_STACK_UNDERFLOW:   return "Stack underflow";
+    /*case GL_STACK_OVERFLOW:    return "Stack overflow";
+    case GL_STACK_UNDERFLOW:   return "Stack underflow";*/
     case GL_OUT_OF_MEMORY:     return "Out of memory";
     default:                   return "Unknown error";
     }
@@ -269,10 +272,15 @@ int main() {
 
     glfwMakeContextCurrent(window);
 
-    if(GLEW_OK!=glewInit()){
+    /*if(GLEW_OK!=glewInit()){
         printf("glew init error :(");
         return 1;
-    }
+    }*/
+
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)){
+        printf("Failed to initialize GLAD\n");
+        return -1;
+    }    
 
     glViewport(0,0,width,height);
 
